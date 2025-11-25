@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Gestión de Equipos</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <header>
+        <h3>Admin Panel</h3>
+        <button class="btn btn-danger" onclick="logout()">Logout</button>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <h3>Crear Deporte</h3>
+            <div class="form-group">
+                <label>Nombre del deporte</label>
+                <input type="text" id="sport-name">
+            </div>
+            <button class="btn btn-primary" onclick="handleCreateSport()">Crear deporte</button>
+        </div>
+
+        <div class="card" style="margin-top:24px">
+            <h3>Crear Equipo</h3>
+            <div class="form-group">
+                <label>Selecciona deporte</label>
+                <select id="sport-select"></select>
+            </div>
+            <div class="form-group">
+                <label>Nombre del equipo</label>
+                <input type="text" id="team-name">
+            </div>
+            <button class="btn btn-primary" onclick="handleCreateTeam()">Crear equipo</button>
+        </div>
+
+        <h2 style="margin-top: 40px;">Equipos por deporte</h2>
+        <div id="teams-list" class="grid"></div>
+
+        <div class="card" style="margin-top:24px">
+            <h3>Aplicar sanción por correo</h3>
+            <div class="form-group">
+                <label>Correo del estudiante</label>
+                <input type="email" id="sanction-email">
+            </div>
+            <div class="form-group">
+                <label>Motivo</label>
+                <input type="text" id="sanction-reason">
+            </div>
+            <div class="form-group">
+                <label>Expira (opcional)</label>
+                <input type="datetime-local" id="sanction-expires">
+            </div>
+            <button class="btn btn-danger" onclick="handleAddSanction()">Aplicar sanción</button>
+        </div>
+    </div>
+
+    <script src="js/app.js?v=1"></script>
+    <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (!user || user.role !== 'ADMIN') {
+            window.location.href = 'dashboard.html';
+        }
+
+        if (typeof window.getSports !== 'function') {
+            window.getSports = async function() {
+                const response = await fetch('/api/deportes');
+                return await response.json();
+            };
+        }
+        if (typeof window.getTeamsBySport !== 'function') {
+            window.getTeamsBySport = async function(sportId) {
+                const response = await fetch(`/api/deportes/${sportId}/equipos`);
+                return await response.json();
+            };
+        }
+        if (typeof window.createSport !== 'function') {
+            window.createSport = async function(name) {
+                const u = JSON.parse(localStorage.getItem('user'));
+                const response = await fetch(`/api/deportes?adminUserId=${u.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                return response.ok ? await response.json() : null;
+            };
+        }
+        if (typeof window.updateSport !== 'function') {
+            window.updateSport = async function(sportId, name) {
+                const u = JSON.parse(localStorage.getItem('user'));
+                const response = await fetch(`/api/deportes/${sportId}?adminUserId=${u.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                return response.ok ? await response.json() : null;
+            };
+        }
+        if (typeof window.createTeam !== 'function') {
+            window.createTeam = async function(sportId, name) {
+                const u = JSON.parse(localStorage.getItem('user'));
+                const response = await fetch(`/api/deportes/${sportId}/equipos?adminUserId=${u.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                return response.ok ? await response.json() : null;
+            };
+        }
+        if (typeof window.deleteTeam !== 'function') {
+            window.deleteTeam = async function(sportId, teamId) {
+                const u = JSON.parse(localStorage.getItem('user'));
+                const response = await fetch(`/api/deportes/${sportId}/equipos/${teamId}?adminUserId=${u.id}`, { method: 'DELETE' });
+                return response.ok;
+            };
+        }
+        if (typeof window.addSanctionByEmail !== 'function') {
+            window.addSanctionByEmail = async function(studentEmail, reason, expiresAt) {
+                const u = JSON.parse(localStorage.getItem('user'));
+                const params = new URLSearchParams({ adminUserId: u.id, studentEmail, reason });
+                if (expiresAt) params.set('expiresAt', expiresAt);
+                const response = await fetch(`/api/sanciones/por-email?${params.toString()}`, { method: 'POST' });
+                return response.ok ? await response.json() : null;
+            };
+        }
+
+        async function refreshSports() {
+            if (typeof window.getSports !== 'function' || typeof window.getTeamsBySport !== 'function') { alert('Funciones de deportes no disponibles'); return; }
+            const sports = await window.getSports();
+            const select = document.getElementById('sport-select');
+            select.innerHTML = sports.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+            const list = document.getElementById('teams-list');
+            list.innerHTML = '';
+            for (const s of sports) {
+                const teams = await window.getTeamsBySport(s.id);
+                list.innerHTML += `<div class=\"card\">
+                    <div style=\"display:flex;justify-content:space-between;align-items:center\">
+                        <h3>${s.name}</h3>
+                        <button class=\"btn btn-primary\" onclick=\"handleEditSport('${s.id}', '${s.name}')\">Editar nombre</button>
+                    </div>` + (teams.length ? teams.map(t => `
+                    <div style=\"display:flex;justify-content:space-between;align-items:center;margin-top:8px\">
+                        <div><strong>${t.name}</strong> <span style=\"font-size:12px;color:#555\">Miembros: ${t.memberIds ? t.memberIds.length : 0}</span></div>
+                        <button class=\"btn btn-danger\" onclick=\"handleDeleteTeam('${s.id}','${t.id}')\">Eliminar</button>
+                    </div>`).join('') : '<div>No hay equipos</div>') + `</div>`;
+            }
+        }
+
+        async function handleCreateSport() {
+            const name = document.getElementById('sport-name').value;
+            if (!name) { alert('Ingresa el nombre del deporte'); return; }
+            if (typeof window.createSport !== 'function') { alert('Función createSport no disponible'); return; }
+            const created = await window.createSport(name);
+            if (created) { alert('Deporte creado'); document.getElementById('sport-name').value = ''; refreshSports(); } else { alert('Error al crear deporte'); }
+        }
+
+        async function handleCreateTeam() {
+            const sportId = document.getElementById('sport-select').value;
+            const name = document.getElementById('team-name').value;
+            if (!sportId || !name) { alert('Selecciona deporte e ingresa nombre'); return; }
+            if (typeof window.createTeam !== 'function') { alert('Función createTeam no disponible'); return; }
+            const created = await window.createTeam(sportId, name);
+            if (created) { alert('Equipo creado'); document.getElementById('team-name').value=''; refreshSports(); } else { alert('Error al crear equipo'); }
+        }
+
+        async function handleDeleteTeam(sportId, teamId) {
+            if (!confirm('¿Eliminar equipo?')) return;
+            if (typeof window.deleteTeam !== 'function') { alert('Función deleteTeam no disponible'); return; }
+            const ok = await window.deleteTeam(sportId, teamId);
+            if (ok) { refreshSports(); } else { alert('No se pudo eliminar'); }
+        }
+
+        async function handleAddSanction() {
+            const email = document.getElementById('sanction-email').value;
+            const reason = document.getElementById('sanction-reason').value;
+            const expires = document.getElementById('sanction-expires').value;
+            if (!email || !reason) { alert('Correo y motivo son obligatorios'); return; }
+            if (typeof window.addSanctionByEmail !== 'function') { alert('Función de sanción no disponible'); return; }
+            const created = await window.addSanctionByEmail(email, reason, expires);
+            if (created) { alert('Sanción aplicada'); document.getElementById('sanction-reason').value=''; document.getElementById('sanction-expires').value=''; } else { alert('No se pudo aplicar la sanción'); }
+        }
+
+        async function handleEditSport(sportId, currentName) {
+            const newName = prompt('Ingresa el nuevo nombre para el deporte:', currentName);
+            if (!newName || newName === currentName) return;
+            if (typeof window.updateSport !== 'function') { alert('Función updateSport no disponible'); return; }
+            const updated = await window.updateSport(sportId, newName);
+            if (updated) { alert('Deporte actualizado'); refreshSports(); } else { alert('Error al actualizar deporte'); }
+        }
+
+        refreshSports();
+    </script>
+</body>
+
+</html>

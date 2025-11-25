@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Gestión de Equipos</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <header>
+        <h3>Gestión de Equipos</h3>
+        <button class="btn btn-danger" onclick="logout()">Logout</button>
+    </header>
+
+    <div class="container">
+        <h2>Deportes y Equipos</h2>
+        <div id="sports-container" class="grid"></div>
+        <div id="teams-container" class="grid" style="margin-top:16px"></div>
+        <div id="my-teams-container" style="margin-top:16px"></div>
+
+        <h2 style="margin-top: 40px;">Mis Sanciones</h2>
+        <div id="sanctions-container"></div>
+        
+        <h2 style="margin-top: 40px;">Sports & Teams</h2>
+        <div id="sports-container" class="grid"></div>
+        <div id="teams-container" class="grid" style="margin-top:16px"></div>
+        <div id="my-teams-container" style="margin-top:16px"></div>
+    </div>
+
+    
+
+        <script src="js/app.js"></script>
+        <script>
+            checkAuth();
+
+        async function loadSports() {
+            const sports = await getSports();
+            const container = document.getElementById('sports-container');
+            container.innerHTML = sports.map(s => `
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <strong>${s.name}</strong>
+                        <button class="btn btn-primary" onclick="loadTeams('${s.id}', '${s.name}')">Ver equipos</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadTeams(sportId, sportName) {
+            const teams = await getTeamsBySport(sportId);
+            const container = document.getElementById('teams-container');
+            container.innerHTML = `<h3>${sportName}</h3>` + teams.map(t => `
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <div>
+                            <strong>${t.name}</strong>
+                            <div style="font-size:12px;color:#555">Miembros: ${t.memberIds ? t.memberIds.length : 0}</div>
+                        </div>
+                        <button class="btn btn-primary" onclick="handleJoin('${t.id}')">Unirme</button>
+                    </div>
+                </div>
+            `).join('');
+            updateMyTeams();
+        }
+
+        async function handleJoin(teamId) {
+            const ok = await joinTeam(teamId);
+            if (ok) {
+                alert('Te uniste al equipo');
+                updateMyTeams();
+            } else {
+                alert('No fue posible unirte');
+            }
+        }
+
+        async function updateMyTeams() {
+            const user = JSON.parse(localStorage.getItem('user'));
+            const sports = await getSports();
+            let myTeams = [];
+            for (const s of sports) {
+                const teams = await getTeamsBySport(s.id);
+                myTeams = myTeams.concat(teams.filter(t => Array.isArray(t.memberIds) && t.memberIds.includes(user.id)).map(t => ({...t, sportName: s.name})));
+            }
+            const container = document.getElementById('my-teams-container');
+            container.innerHTML = `<h3>Mis equipos</h3>` + (myTeams.length ? myTeams.map(t => `
+                <div class="card">
+                    <strong>${t.name}</strong> <span style="font-size:12px;color:#555">(${t.sportName})</span>
+                </div>
+            `).join('') : '<div class="card">No perteneces a ningún equipo</div>');
+        }
+
+        async function loadSanctions() {
+            const user = JSON.parse(localStorage.getItem('user'));
+            const sanctions = await getSanctionsByStudent(user.id);
+            const container = document.getElementById('sanctions-container');
+            container.innerHTML = sanctions.length ? sanctions.map(s => `
+                <div class="card">
+                    <div>
+                        <strong>${s.reason}</strong>
+                        <div style="font-size:12px;color:#555">Emitida: ${s.issuedAt ? new Date(s.issuedAt).toLocaleString() : '-'}</div>
+                        <div style="font-size:12px;color:#555">Expira: ${s.expiresAt ? new Date(s.expiresAt).toLocaleString() : '-'}</div>
+                        <div style="font-size:12px;color:${s.active ? '#b30000' : '#2b7a0b'}">Estado: ${s.active ? 'Activa' : 'Inactiva'}</div>
+                    </div>
+                </div>
+            `).join('') : '<div class="card">No tienes sanciones</div>';
+        }
+
+        loadSports();
+        loadSanctions();
+
+        async function loadSports() {
+            const sports = await getSports();
+            const container = document.getElementById('sports-container');
+            container.innerHTML = sports.map(s => `
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <strong>${s.name}</strong>
+                        <button class="btn btn-primary" onclick="loadTeams('${s.id}', '${s.name}')">Ver equipos</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadTeams(sportId, sportName) {
+            const teams = await getTeamsBySport(sportId);
+            const container = document.getElementById('teams-container');
+            container.innerHTML = `<h3>${sportName}</h3>` + teams.map(t => `
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <div>
+                            <strong>${t.name}</strong>
+                            <div style="font-size:12px;color:#555">Miembros: ${t.memberIds ? t.memberIds.length : 0}</div>
+                        </div>
+                        <button class="btn btn-primary" onclick="handleJoin('${t.id}')">Unirme</button>
+                    </div>
+                </div>
+            `).join('');
+            updateMyTeams();
+        }
+
+        async function handleJoin(teamId) {
+            const ok = await joinTeam(teamId);
+            if (ok) {
+                alert('Te uniste al equipo');
+                updateMyTeams();
+            } else {
+                alert('No fue posible unirte');
+            }
+        }
+
+        async function updateMyTeams() {
+            const user = JSON.parse(localStorage.getItem('user'));
+            const sports = await getSports();
+            let myTeams = [];
+            for (const s of sports) {
+                const teams = await getTeamsBySport(s.id);
+                myTeams = myTeams.concat(teams.filter(t => Array.isArray(t.memberIds) && t.memberIds.includes(user.id)).map(t => ({...t, sportName: s.name})));
+            }
+            const container = document.getElementById('my-teams-container');
+            container.innerHTML = `<h3>Mis equipos</h3>` + (myTeams.length ? myTeams.map(t => `
+                <div class="card">
+                    <strong>${t.name}</strong> <span style="font-size:12px;color:#555">(${t.sportName})</span>
+                </div>
+            `).join('') : '<div class="card">No perteneces a ningún equipo</div>');
+        }
+
+        loadSports();
+        </script>
+</body>
+
+</html>
